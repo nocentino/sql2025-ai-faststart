@@ -49,11 +49,6 @@ services:
 
   # 3. SQL Server 2025. Vector data type, AI_GENERATE_EMBEDDINGS, VECTOR_SEARCH,
   #    and DiskANN vector indexes all live here.
-  #
-  #    NOTE for Apple Silicon: the image is amd64 and runs under Rosetta. You
-  #    need SQL Server 2025 CU1 or later (the `2025-latest` tag below includes
-  #    it) — CU1 fixed the AVX issue that prevented vector ops under emulation.
-  #    See: https://www.nocentino.com/posts/2026-02-02-sql-server-2025-cu1-fixes-avx-issue/
   sql1:
     platform: linux/amd64
     image: mcr.microsoft.com/mssql/server:2025-latest
@@ -79,11 +74,6 @@ services:
       - ACCEPT_EULA=Y
       - MSSQL_SA_PASSWORD=S0methingS@Str0ng!   # demo only — throwaway password
       - MSSQL_PID=Developer
-    # Readiness probe: don't just check that the port is open — confirm the engine
-    # actually answers a query. sqlcmd runs `SELECT 'PROBEOK'` and we grep for it,
-    # so the service only reports "healthy" once SQL is truly serving queries.
-    # mssql-tools18 ships in the 2025 image; -C trusts the self-signed cert and
-    # -l/-t make a stuck probe fail fast instead of hanging the whole startup.
     healthcheck:
       test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"S0methingS@Str0ng!\" -C -l 5 -t 5 -h -1 -Q \"SET NOCOUNT ON; SELECT 'PROBEOK'\" 2>/dev/null | grep -q '^PROBEOK$$'"]
       interval: 10s

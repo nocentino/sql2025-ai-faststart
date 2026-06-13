@@ -57,7 +57,7 @@ Server 2025 requires and reverse-proxies to it.
 
 ```
    ┌──────────────────────────────────┐
-   │  Host Ollama  :11434  (GPU)       │   nomic-embed-text
+   │  Host Ollama  :11434  (GPU)      │   nomic-embed-text
    └─────────────────▲────────────────┘
                      │ http  (host.docker.internal)
 ─ docker compose ────┼────────────────────────────────────────────────────────
@@ -205,6 +205,18 @@ For the SQL Server 2025 side (all GA except the vector index, which is preview):
 | `AI_GENERATE_EMBEDDINGS` | A T-SQL function that turns text into a vector inline — no app code |
 | `VECTOR_DISTANCE` | Exact (kNN) similarity between two vectors (cosine, euclidean, dot) |
 | `CREATE VECTOR INDEX` + `VECTOR_SEARCH` | DiskANN approximate (ANN) search that scales to millions/billions of vectors *(preview)* |
+
+> **What's next for DiskANN (and what differs on Azure SQL):** the vector index has a
+> newer "latest-version" form that is GA on **Azure SQL Database / Fabric** (not yet
+> in the SQL Server 2025 box). It drops the read-only-after-index limitation (full
+> `INSERT`/`UPDATE`/`DELETE`/`MERGE` with live maintenance), applies `WHERE` filters
+> *during* the search (iterative filtering), adds `sys.dm_db_vector_indexes` for
+> staleness monitoring, and changes the query syntax: `SELECT TOP (N) WITH APPROXIMATE`
+> with **no** `TOP_N` (using `TOP_N` against a latest-version index errors with Msg 42274).
+> This repo runs on the SQL Server 2025 container, so Step 6 uses the current `TOP_N`
+> syntax; `demos/vector-demos.sql` shows the GA form in a comment. See
+> [DiskANN vector index improvements](https://devblogs.microsoft.com/azure-sql/diskann-vector-index-improvements/)
+> and the [VECTOR_SEARCH docs](https://learn.microsoft.com/en-us/sql/t-sql/functions/vector-search-transact-sql).
 
 For the Data API builder side:
 
