@@ -1,8 +1,12 @@
 {
   "mcpServers": {
-    "adventureworks": {
+    "stackoverflow": {
       "type": "http",
       "url": "http://localhost:5001/mcp"
+    },
+    "sql-dba": {
+      "type": "http",
+      "url": "http://localhost:3001/mcp"
     }
   }
 }

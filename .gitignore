@@ -2,5 +2,12 @@
 certs/*.crt
 certs/*.key
 
+# Sample databases are downloaded by start.sh (too big to commit)
+backups/*.bak
+
+# SQL DBA MCP server build artifacts
+sql-dba-mcp/node_modules/
+sql-dba-mcp/dist/
+
 # macOS
 .DS_Store

@@ -43,21 +43,21 @@
     }
   },
   "entities": {
-    "FindSimilarProducts": {
+    "FindSimilarQuestions": {
       "source": {
-        "object": "SalesLT.find_similar_products",
+        "object": "dbo.find_similar_questions",
         "type": "stored-procedure",
         "parameters": [
           {
             "name": "prompt",
             "required": true,
-            "description": "A natural-language description of what the user is looking for, e.g. 'an affordable red road bike' or 'something comfortable for a long ride'. This text is embedded and compared against every product."
+            "description": "A natural-language description of the problem the user is facing, in their own words, e.g. 'my git history is a mess, how do I clean it up?' or 'how do I make a column of boxes line up horizontally'. This text is embedded and compared against every stored question."
           },
           {
             "name": "top",
             "required": false,
-            "default": 5,
-            "description": "How many of the closest-matching products to return. Defaults to 5."
+            "default": "5",
+            "description": "How many of the closest-matching questions to return. Defaults to 5."
           }
         ]
       },
@@ -78,13 +78,13 @@
           "actions": ["execute"]
         }
       ],
-      "description": "Semantic product search over the AdventureWorks catalog, powered by SQL Server 2025 native vector search and local Ollama embeddings. Call this whenever a user describes what they want in their own words instead of giving an exact product name, number, or filter (e.g. 'a lightweight bike for hills', 'a gift under $50'). Returns the closest-matching products ranked by cosine distance (smaller distance = better match), with name, list price, and the descriptive text that was matched."
+      "description": "Semantic search over StackOverflow questions, powered by SQL Server 2025 native vector search and local Ollama embeddings. Call this whenever a user describes a problem or topic in their own words rather than giving exact keywords or a question id (e.g. 'why is my async function returning a Promise instead of a value', 'how to undo a commit'). Matching is by meaning, so relevant questions come back even with no shared keywords. Returns the closest-matching questions ranked by cosine distance (smaller = better), with title, tags, score, view count, and answer count."
     },
-    "Products": {
+    "Questions": {
       "source": {
-        "object": "SalesLT.vProductCatalog",
+        "object": "dbo.vQuestions",
         "type": "view",
-        "key-fields": ["ProductID"]
+        "key-fields": ["Id"]
       },
       "rest": {
         "enabled": true
@@ -92,8 +92,8 @@
       "graphql": {
         "enabled": true,
         "type": {
-          "singular": "Product",
-          "plural": "Products"
+          "singular": "Question",
+          "plural": "Questions"
         }
       },
       "permissions": [
@@ -102,11 +102,11 @@
           "actions": ["read"]
         }
       ],
-      "description": "The product catalog: name, product number, color, size, weight, standard cost, list price, category, and model. Use this for exact lookups and structured filters (by name, category, color, or price range). For fuzzy 'find me something like…' requests, use FindSimilarProducts instead."
+      "description": "StackOverflow questions: id, title, tags, score, view count, answer count, and creation date. Use this for exact lookups and structured filters (by id, by tag substring, by score or view-count thresholds, by date). For fuzzy 'find questions like…' requests, use FindSimilarQuestions instead."
     },
-    "ProductCategories": {
+    "Users": {
       "source": {
-        "object": "SalesLT.ProductCategory",
+        "object": "dbo.Users",
         "type": "table"
       },
       "rest": {
@@ -115,8 +115,8 @@
       "graphql": {
         "enabled": true,
         "type": {
-          "singular": "ProductCategory",
-          "plural": "ProductCategories"
+          "singular": "User",
+          "plural": "Users"
         }
       },
       "permissions": [
@@ -125,76 +125,7 @@
           "actions": ["read"]
         }
       ],
-      "description": "Product category hierarchy (e.g. Bikes, Components, Clothing, Accessories, and their subcategories). Use this to understand how products are organized."
-    },
-    "Customers": {
-      "source": {
-        "object": "SalesLT.Customer",
-        "type": "table"
-      },
-      "rest": {
-        "enabled": true
-      },
-      "graphql": {
-        "enabled": true,
-        "type": {
-          "singular": "Customer",
-          "plural": "Customers"
-        }
-      },
-      "permissions": [
-        {
-          "role": "anonymous",
-          "actions": ["read"]
-        }
-      ],
-      "description": "Customers, including company name, contact name, and sales person. Join to SalesOrders via CustomerID."
-    },
-    "SalesOrders": {
-      "source": {
-        "object": "SalesLT.SalesOrderHeader",
-        "type": "table"
-      },
-      "rest": {
-        "enabled": true
-      },
-      "graphql": {
-        "enabled": true,
-        "type": {
-          "singular": "SalesOrder",
-          "plural": "SalesOrders"
-        }
-      },
-      "permissions": [
-        {
-          "role": "anonymous",
-          "actions": ["read"]
-        }
-      ],
-      "description": "Sales order headers: order date, due date, ship date, status, customer, and totals. Each order has one or more line items in SalesOrderDetails. Join via SalesOrderID."
-    },
-    "SalesOrderDetails": {
-      "source": {
-        "object": "SalesLT.SalesOrderDetail",
-        "type": "table"
-      },
-      "rest": {
-        "enabled": true
-      },
-      "graphql": {
-        "enabled": true,
-        "type": {
-          "singular": "SalesOrderDetail",
-          "plural": "SalesOrderDetails"
-        }
-      },
-      "permissions": [
-        {
-          "role": "anonymous",
-          "actions": ["read"]
-        }
-      ],
-      "description": "Individual line items for each sales order: product, quantity, unit price, and discount. Join to SalesOrders via SalesOrderID and to Products via ProductID."
+      "description": "StackOverflow users: id, display name, reputation, location, and about-me. Join from a question's OwnerUserId to see who asked it, or filter by reputation/location."
     }
   }
 }

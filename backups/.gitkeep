@@ -1,0 +1,1 @@
+# Keeps backups/ in git. The StackOverflow .bak is downloaded here by start.sh (gitignored).

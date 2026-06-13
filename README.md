@@ -13,6 +13,12 @@ It brings together two things I've been demoing separately:
   GraphQL, **and** a Model Context Protocol (MCP) server with zero code, so an AI
   agent like Claude or GitHub Copilot can query your data as a set of tools.
 
+The data is the **StackOverflow** public dataset — real developer questions — so
+semantic search lands for an AI audience: you search by *meaning*, over text
+everyone in the room recognizes. As a bonus second act, a small **SQL DBA MCP
+server** gives the agent ~30 read-only fleet-monitoring tools, so it can also
+reason about the *health* of the server, not just its data.
+
 If you live in the AI world but SQL Server isn't your daily driver, here's the
 one-sentence bridge: **everything you already know about embeddings, vector
 search, and RAG works here — except the vectors live right next to the business
@@ -24,7 +30,6 @@ an agent is a config file, not a service you have to build.**
 > in this repo includes it) — CU1 fixed the AVX issue that used to break vector
 > operations under emulation. Background:
 > [SQL Server 2025 CU1 fixes the Docker Desktop AVX issue](https://www.nocentino.com/posts/2026-02-02-sql-server-2025-cu1-fixes-avx-issue/).
-> Docker Desktop or OrbStack both work.
 
 ---
 
@@ -37,59 +42,64 @@ Server. Everything is pre-built at startup, so nothing makes you wait live.
 |---|---|---|
 | 0–3 min | Architecture slide + `docker compose ps` | One database does it all — no separate vector DB, no app tier to glue it together. |
 | 3–8 min | **Step 2** in `demos/vector-demos.sql`: create the EXTERNAL MODEL, run the single-embedding `SELECT` | "An embedding is a SQL function call. The model is just a named pointer — Ollama today, Azure OpenAI tomorrow, same query." |
-| 8–14 min | **Steps 3–5**: show the `VECTOR(768)` column + the kNN search with `VECTOR_DISTANCE` | Semantic search over business data, in T-SQL. Note it never matches the literal words. |
+| 8–14 min | **Steps 3–5**: show the `VECTOR(768)` column + the kNN search with `VECTOR_DISTANCE` | Semantic search over real questions, in T-SQL. Note it never matches the literal words. |
 | 14–19 min | **Step 6**: the DiskANN `CREATE VECTOR INDEX` + `VECTOR_SEARCH`, compare the IO stats | This is how it scales — the same DiskANN tech Microsoft runs at billions of vectors. |
-| 19–22 min | **Step 7**: the `find_similar_products` proc + the least-privilege `dab_app` login | "Now I'll hand this to an agent — but only what I choose, and only what this login can touch." |
-| 22–29 min | Switch to your AI client. Run the prompts in `demos/agent-demo.md` against the **DAB MCP** endpoint | The payoff: the agent does semantic search and answers data questions with **zero SQL**, governed by DAB. |
-| 29–30 min | Recap the two-feature story | SQL Server 2025 = AI *in* the database. DAB MCP = AI agents *onto* the database. |
+| 19–22 min | **Step 7**: the `find_similar_questions` proc + the least-privilege `dab_app` login | "Now I'll hand this to an agent — but only what I choose, and only what this login can touch." |
+| 22–29 min | Switch to your AI client. Run the prompts in `demos/agent-demo.md` — semantic search via **DAB MCP**, then the **SQL DBA MCP** bonus act | The payoff: the agent does semantic search *and* DBA triage with **zero SQL**, governed by config + least-privilege logins. |
+| 29–30 min | Recap the story | SQL Server 2025 = AI *in* the database. MCP = AI agents *onto* the database — for both its data and its operations. |
 
 ---
 
 ## Architecture
 
+Ollama runs on the **host** (GPU-accelerated). NGINX adds the TLS that SQL
+Server 2025 requires and reverse-proxies to it.
+
 ```
-                          docker compose network
-  ┌───────────────────────────────────────────────────────────────────────┐
-  │                                                                         │
-  │   ┌──────────┐     pull      ┌──────────────┐                           │
-  │   │  ollama  │◄──────────────│ model-puller │  (nomic-embed-text)       │
-  │   │  :11434  │               └──────────────┘                           │
-  │   └────┬─────┘                                                          │
-  │        │ http                                                           │
-  │   ┌────▼─────┐   HTTPS (TLS)   ┌──────────────────────────────────┐     │
-  │   │ model-web│◄────────────────│  SQL Server 2025   (sql1 :1433)  │     │
-  │   │ (nginx)  │  AI_GENERATE_   │  AdventureWorksLT                │     │
-  │   │  :443    │  EMBEDDINGS     │  • VECTOR(768) column            │     │
-  │   └──────────┘                 │  • DiskANN vector index          │     │
-  │                                │  • find_similar_products proc    │     │
-  │                                └───────────────┬──────────────────┘     │
-  │                                                │ SELECT / EXECUTE        │
-  │                                                │ (as least-priv dab_app) │
-  │                                ┌───────────────▼──────────────────┐     │
-  │   AI agent  ───── MCP ────────►│  Data API builder   (dab :5001)  │     │
-  │  (Claude / Copilot)            │  REST  •  GraphQL  •  MCP        │     │
-  │                                └──────────────────────────────────┘     │
-  └───────────────────────────────────────────────────────────────────────┘
+   ┌──────────────────────────────────┐
+   │  Host Ollama  :11434  (GPU)       │   nomic-embed-text
+   └─────────────────▲────────────────┘
+                     │ http  (host.docker.internal)
+─ docker compose ────┼────────────────────────────────────────────────────────
+ │   ┌──────────┐    │ HTTPS (TLS)   ┌───────────────────────────────────┐    │
+ │   │ model-web│◄───┴───────────────│  SQL Server 2025   (sql1 :1433)   │    │
+ │   │ (nginx)  │   AI_GENERATE_     │  StackOverflow                    │    │
+ │   │  :443    │   EMBEDDINGS       │  • VECTOR(768) column             │    │
+ │   └──────────┘                    │  • DiskANN vector index           │    │
+ │                                   │  • find_similar_questions proc    │    │
+ │                                   └──────┬────────────────────┬───────┘    │
+ │                     dab_app: SELECT/EXEC │      dba_monitor: VIEW          │
+ │                                          │      SERVER STATE  │            │
+ │   AI agent  ┌────────────────────────────▼───┐    ┌───────────▼──────────┐ │
+ │  ──── MCP ─►│ Data API builder      (dab:5001)│   │ SQL DBA MCP (:3001)  │ │
+ │ (Claude/    │ REST · GraphQL · MCP            │   │ ~30 read-only tools  │ │
+ │  Copilot)   │ semantic search + catalog       │   │ waits, blocking, …   │ │
+ │             └─────────────────────────────────┘   └──────────────────────┘ │
+ └────────────────────────────────────────────────────────────────────────────
 ```
 
 | Service | Purpose | Host port |
 |---|---|---|
-| `ollama` | Serves the `nomic-embed-text` embedding model locally | 11434 |
-| `model-web` | NGINX, terminates TLS in front of Ollama (SQL Server requires HTTPS) | 443 |
-| `sql1` | SQL Server 2025 — AdventureWorksLT, vectors, the search proc | 1433 |
+| `model-web` | NGINX, terminates TLS in front of host Ollama (SQL Server requires HTTPS) | 443 |
+| `sql1` | SQL Server 2025 — StackOverflow, vectors, the search proc | 1433 |
 | `sql-init` | One-shot: restores the DB and runs `vector-demos.sql`, then exits | — |
 | `dab` | Data API builder — exposes the DB over REST, GraphQL, and **MCP** | 5001 |
-| `config` / `model-puller` | One-shot helpers (cert generation, model pull) | — |
+| `sql-dba-mcp` | Bonus: read-only DBA monitoring MCP server (~30 tools) | 3001 |
+| `config` | One-shot helper that generates the NGINX TLS cert | — |
+
+Ollama itself is **not** a container here — it runs on your host so it's
+GPU-accelerated and you don't re-download the model into a volume.
 
 ---
 
 ## Prerequisites
 
 - Docker Desktop or OrbStack (Apple Silicon and x86 both fine)
+- **[Ollama](https://ollama.com) installed and running on the host.** `start.sh`
+  pulls `nomic-embed-text` for you if it's missing.
 - ~8 GB free RAM for the containers
-- A SQL client: [Azure Data Studio](https://learn.microsoft.com/en-us/azure-data-studio/),
-  SSMS, or the [VS Code mssql extension](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql)
-- An MCP-capable AI client (VS Code + GitHub Copilot, or Claude Desktop) for the finale
+- A SQL client: SSMS, or the [VS Code mssql extension](https://marketplace.visualstudio.com/items?itemName=ms-mssql.mssql)
+- An MCP-capable AI client (Claude in VS Code, GitHub Copilot, or Claude Desktop) for the finale
 
 ## Quick start
 
@@ -99,17 +109,25 @@ cd sql2025-ai-faststart
 ./start.sh
 ```
 
-That's it. The first run pulls images, restores AdventureWorksLT, and embeds the
-whole product catalog with Ollama — a few minutes. Watch it finish:
+`start.sh` checks host Ollama, downloads the StackOverflow sample database
+(~759 MB, **one time** — too big to commit), then brings up the stack. The first
+run restores StackOverflow and embeds a curated set of questions via Ollama — a
+couple of minutes. Watch it finish:
 
 ```bash
 docker compose logs -f sql-init      # this container exits 0 when setup is done
-docker compose ps                    # sql1 + dab should be healthy
+docker compose ps                    # sql1, dab, sql-dba-mcp should be healthy
 curl http://localhost:5001/health    # Data API builder
+curl http://localhost:3001/health    # SQL DBA MCP server
 ```
 
 Connect your SQL client to `localhost,1433` as `sa` / `S0methingS@Str0ng!` and
 open [demos/vector-demos.sql](demos/vector-demos.sql).
+
+> **Containers can't reach host Ollama?** On Docker Desktop this just works
+> (`host.docker.internal` proxies to the host's localhost). On other runtimes,
+> make Ollama listen on all interfaces — `launchctl setenv OLLAMA_HOST "0.0.0.0"`
+> then restart Ollama — and re-run `./start.sh`.
 
 ## The walkthrough
 
@@ -119,54 +137,60 @@ re-run the interesting parts live:
 
 | Step | What it shows |
 |---|---|
-| 0–1 | Enable outbound HTTPS; restore AdventureWorksLT *(setup only — skip live)* |
-| 2 | `CREATE EXTERNAL MODEL` pointing at Ollama; generate one embedding to see what it is |
+| 0–1 | Enable outbound HTTPS; restore StackOverflow *(setup only — skip live)* |
+| 2 | `CREATE EXTERNAL MODEL` pointing at host Ollama; generate one embedding to see what it is |
 | 3 | The native `VECTOR(768)` column |
-| 4 | `AI_GENERATE_EMBEDDINGS` over the catalog in a single `INSERT…SELECT` |
+| 4 | `AI_GENERATE_EMBEDDINGS` over the top 2,000 questions in a single `INSERT…SELECT` |
 | 5 | Exact semantic search (kNN) with `VECTOR_DISTANCE` — watch the table scan |
 | 6 | DiskANN `CREATE VECTOR INDEX` + `VECTOR_SEARCH` (ANN) — watch it get cheap |
-| 7 | Wrap the search in a stored proc + create the least-privilege `dab_app` login |
+| 7 | Wrap the search in a stored proc + create the `dab_app` and `dba_monitor` least-privilege logins |
 
-## The payoff — connect an AI agent over MCP
+## The payoff — connect AI agents over MCP
 
-This is the part the AI audience cares about. Data API builder reads
-[dab-config.json](dab-config.json) and stands up an MCP server at
-`http://localhost:5001/mcp`. Two kinds of tools show up automatically:
+This is the part the AI audience cares about. Two MCP servers come up, and this
+repo's project-scoped [`.mcp.json`](.mcp.json) pre-wires both for Claude in VS Code:
 
-- **Data tools** over `Products`, `ProductCategories`, `Customers`,
-  `SalesOrders`, and `SalesOrderDetails` (read-only here) — the agent can browse
-  and filter the catalog and orders without writing SQL.
-- **`FindSimilarProducts`** — our semantic-search proc, registered as a *named*
-  MCP custom tool (`mcp.custom-tool: true`, new in DAB 2.0). When the user
-  describes what they want in plain language, the agent calls this tool; DAB
-  executes the proc; SQL Server embeds the query with Ollama and runs vector
-  search. The agent gets ranked results and never sees a line of SQL.
+**`stackoverflow`** — Data API builder reads [dab-config.json](dab-config.json)
+and stands up an MCP server at `http://localhost:5001/mcp`:
 
-If you use **Claude in VS Code**, it's already wired up — this repo ships a
-project-scoped [`.mcp.json`](.mcp.json), so opening the folder is enough (approve
-the server when Claude prompts, or run `/mcp`). For GitHub Copilot or Claude
-Desktop, see [docs/mcp-client-setup.md](docs/mcp-client-setup.md). Then run the
-scripted prompts in [demos/agent-demo.md](demos/agent-demo.md).
+- **Data tools** over `Questions` (the catalog view) and `Users` (read-only) — the
+  agent can filter questions by tag/score/date and look up who asked them.
+- **`find_similar_questions`** — our semantic-search proc, registered as a *named*
+  MCP custom tool (`mcp.custom-tool: true`, new in DAB 2.0). When the user describes
+  a problem in plain language, the agent calls this tool; DAB executes the proc;
+  SQL Server embeds the query with Ollama and runs vector search. Ranked results,
+  zero SQL.
+
+**`sql-dba`** — the SQL DBA MCP server at `http://localhost:3001/mcp` exposes ~30
+read-only monitoring tools (wait stats, blocking chains, top queries, missing
+indexes, backup/AG health, deadlocks, …) as `dba_monitor`. The agent can triage
+"why is this server slow?" the way a DBA would.
+
+If you use **Claude in VS Code**, both servers are already wired — opening the
+folder is enough (approve them when Claude prompts, or run `/mcp`). For GitHub
+Copilot or Claude Desktop, see [docs/mcp-client-setup.md](docs/mcp-client-setup.md).
+Then run the scripted prompts in [demos/agent-demo.md](demos/agent-demo.md).
 
 ### What this looks like in practice
 
-> **You:** "I want a comfortable bike for long weekend rides, nothing too pricey.
-> What do you suggest?"
+> **You:** "I need to get a box to sit in the middle of the page, both
+> horizontally and vertically. Any relevant questions?"
 
 ```
-Agent → FindSimilarProducts(prompt: "comfortable bike for long rides, affordable", top: 5)
-      ← [ { Name: "Touring-3000 Blue, 58",  ListPrice: 742.35, distance: 0.21 },
-          { Name: "Touring-1000 Yellow, 60", ListPrice: 2384.07, distance: 0.24 },
+Agent → find_similar_questions(prompt: "center a box in the middle of the page", top: 5)
+      ← [ { Title: "How to vertically center a div for all browsers?",  Score: 1530, distance: 0.12 },
+          { Title: "How do I vertically center text with CSS?",         Score:  980, distance: 0.18 },
           ... ]
 
-Agent: "For comfortable long-distance riding the Touring series is your best fit.
-        The Touring-3000 is the value pick at $742 — built for endurance rather
-        than speed. If budget is flexible, the Touring-1000 is lighter..."
+Agent: "The canonical answer is 'How to vertically center a div for all browsers?'
+        (1,530 votes). For modern browsers the flexbox approach is simplest —
+        set the parent to display:flex with justify-content and align-items both
+        centered..."
 ```
 
-Notice the user never said "Touring," and the agent never wrote SQL. The match
-came from the *meaning* of the request, computed by vector search inside SQL
-Server and handed back through one MCP tool call.
+Notice the user never said "div" or "center," and the agent never wrote SQL. The
+match came from the *meaning* of the request, computed by vector search inside
+SQL Server and handed back through one MCP tool call.
 
 ---
 
@@ -187,22 +211,25 @@ For the Data API builder side:
 | Feature | What it is |
 |---|---|
 | Built-in MCP server | One config exposes REST, GraphQL, **and** an MCP endpoint at the same time |
-| `mcp.custom-tool` | Register a stored procedure as a named MCP tool (used here for `FindSimilarProducts`) |
-| `object-description` / `description` | Human-readable hints surfaced to the agent during MCP tool discovery |
+| `mcp.custom-tool` | Register a stored procedure as a named MCP tool (used here for `find_similar_questions`) |
+| `description` | Human-readable hints surfaced to the agent during MCP tool discovery |
 | Per-entity permissions | The agent only gets the entities and actions you list — governance lives in DAB, not the prompt |
 
 ## A note on security
 
-The whole point of the DAB layer is **controlled** agentic access:
+The whole point of the MCP layer is **controlled** agentic access:
 
-- DAB connects as `dab_app`, a login with `SELECT` on a handful of catalog
-  objects and `EXECUTE` on one proc. No server-level rights, no DDL, nothing
-  else. The agent cannot reach what `dab_app` can't.
-- The entities are read-only in this demo. Flip an action in `dab-config.json`
-  to allow writes — the guardrails are in config, version-controlled.
-- The passwords here (`S0methingS@Str0ng!`, `DabP@ss123!`) are throwaway demo
-  values. Change them before this leaves your laptop. The self-signed TLS certs
-  are generated fresh on every start and are git-ignored.
+- DAB connects as `dab_app`: `SELECT` on a couple of objects and `EXECUTE` on one
+  proc. The DBA server connects as `dba_monitor`: `VIEW SERVER STATE` only — it
+  reads DMVs, it can't read your data or change anything.
+- Every entity is read-only and every DBA tool is read-only. Neither login can
+  perform DDL or writes. The agent's reach is exactly what's in `dab-config.json`
+  and what the logins are granted — not what the model decides to try.
+- The passwords here (`S0methingS@Str0ng!`, `DabP@ss123!`, `MonitorP@ss123!`) are
+  throwaway demo values. Change them before this leaves your laptop. The self-signed
+  TLS cert is generated once and reused (so NGINX and SQL Server always agree on
+  it); it's git-ignored — delete `certs/nginx.crt` + `certs/nginx.key` to mint a
+  fresh one.
 
 ## Project layout
 
@@ -210,17 +237,17 @@ The whole point of the DAB layer is **controlled** agentic access:
 ├── docker-compose.yml          # the whole stack, in dependency order
 ├── dockerfile.ssl              # tiny image that generates the NGINX cert
 ├── dab-config.json             # Data API builder entities + MCP config  ← the new part
-├── .mcp.json                   # pre-wires Claude in VS Code to the DAB MCP endpoint
-├── backups/
-│   └── AdventureWorks2025_FULL.bak
+├── .mcp.json                   # pre-wires Claude in VS Code to BOTH MCP servers
+├── backups/                    # StackOverflow .bak lands here (downloaded by start.sh, git-ignored)
 ├── certs/                      # openssl config + generate script (certs are git-ignored)
 ├── config/
-│   └── nginx.conf              # TLS reverse proxy in front of Ollama
+│   └── nginx.conf              # TLS reverse proxy in front of host Ollama
 ├── demos/
 │   ├── vector-demos.sql        # the canonical, idempotent walkthrough (Steps 0–7)
-│   └── agent-demo.md           # natural-language prompts to run against the agent
+│   └── agent-demo.md           # natural-language prompts to run against the agents
 ├── docs/
-│   └── mcp-client-setup.md     # wire VS Code / Claude Desktop to the DAB MCP endpoint
+│   └── mcp-client-setup.md     # wire VS Code / Claude Desktop to the MCP endpoints
+├── sql-dba-mcp/                # the bonus read-only DBA monitoring MCP server (TypeScript)
 ├── start.sh / stop.sh
 └── README.md
 ```
@@ -229,17 +256,20 @@ The whole point of the DAB layer is **controlled** agentic access:
 
 ```bash
 ./stop.sh            # stop, keep data
-./stop.sh --wipe     # stop and delete SQL data + Ollama models (clean reset)
+./stop.sh --wipe     # stop and delete the SQL data volume (clean reset)
 ```
+
+Host Ollama and the downloaded `.bak` are left alone, so a reset is quick.
 
 ## Wrapping up
 
 Two ideas, one stack. SQL Server 2025 pulls AI *into* the database: embeddings
 and vector search are just data types and functions next to your business data.
-Data API builder puts your agents *onto* the database: one config file turns a
-schema into governed MCP tools. Put them together and an AI agent can do semantic
-search over your operational data without you building a vector store, an
-embedding pipeline, or an API tier.
+MCP puts your agents *onto* the database: Data API builder turns a schema into
+governed semantic-search tools from one config file, and a small DBA server turns
+the DMVs into governed monitoring tools. Put them together and an AI agent can do
+semantic search over your data *and* triage the server's health — without you
+building a vector store, an embedding pipeline, or an API tier.
 
 Clone it, run it, and start poking. Swap `nomic-embed-text` for another model,
 point the EXTERNAL MODEL at Azure OpenAI, expose your own tables in

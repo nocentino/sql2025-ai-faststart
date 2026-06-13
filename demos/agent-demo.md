@@ -1,83 +1,107 @@
 # Agent demo — the natural-language finale
 
-Run these in your AI client (Copilot agent mode or Claude Desktop) once the
-`adventureworks` MCP server is wired up (see
-[../docs/mcp-client-setup.md](../docs/mcp-client-setup.md)). They go from "look,
-no SQL" to "the agent reasons over my data," and they're ordered to build the
-story for an audience that knows AI but not SQL Server.
+Run these in your AI client (Claude in VS Code, Copilot agent mode, or Claude
+Desktop) once the MCP servers are wired up (see
+[../docs/mcp-client-setup.md](../docs/mcp-client-setup.md)). This repo ships a
+project-scoped `.mcp.json` with two servers:
 
-For each prompt: read it out, let the agent run, then point at **which tool it
-chose** and note that it never wrote SQL.
+- **`stackoverflow`** — Data API builder: semantic search + the question catalog.
+- **`sql-dba`** — the SQL DBA MCP server: read-only fleet monitoring.
+
+The prompts go from "look, no SQL" to "the agent reasons over my data" to "the
+agent does DBA work," ordered to build the story for an audience that knows AI
+but not SQL Server. For each prompt: read it out, let the agent run, then point
+at **which tool it chose** and note that it never wrote SQL.
 
 ---
 
 ### 1. Semantic search (the headline)
 
-> Find me a comfortable bike for long weekend rides — nothing too expensive.
+> I'm trying to clean up a messy git history. Got any relevant questions?
 
-The agent should call **`FindSimilarProducts`**. Make the point: the user said
-"comfortable," "long rides," "not expensive" — none of which are columns or
-keywords. The match comes from *meaning*, computed by vector search inside SQL
-Server. Ask a follow-up to show it's conversational:
+The agent should call **`find_similar_questions`**. Make the point: the user said
+"messy," "clean up" — not keywords in any title. The match comes from *meaning*,
+computed by vector search inside SQL Server. Try a few more live — these all
+return spot-on matches with no shared keywords:
 
-> Of those, which is the best value, and why?
+> How do JavaScript closures actually work?
+
+> What's the difference between declaring a variable with let versus var?
+
+> How do I get a box to sit in the middle of the page, both directions?
+
+That last one returns *"How to vertically center a div for all browsers?"* —
+"box" ≈ "div," "middle of the page" ≈ "center." That's the wow.
 
 ---
 
 ### 2. Semantic vs. exact — let the agent pick the right tool
 
-> List every product in the "Road Bikes" category and their prices.
+> Show me the top 10 highest-scored questions tagged with python.
 
-This is a structured filter, so the agent should use **`Products`**, not
-`FindSimilarProducts`. Contrast it with prompt 1: same database, two different
-tools, and the agent decides based on the tool descriptions you wrote in
-`dab-config.json`.
+This is a structured filter, so the agent should use **`Questions`** (the view),
+not `find_similar_questions`. Contrast it with prompt 1: same database, two
+different tools, and the agent decides based on the tool descriptions you wrote
+in `dab-config.json`.
 
-> Now find me something *like* a road bike but better for rough trails.
+> Now find me questions *similar in spirit* to "how do I make my code run faster."
 
-Back to **`FindSimilarProducts`** — "like… but for…" is a meaning question.
+Back to **`find_similar_questions`** — "similar in spirit" is a meaning question.
 
 ---
 
 ### 3. Multi-step reasoning across tools
 
-> What product categories do we sell, and roughly how is the catalog split
-> across them?
+> Find a few popular questions about asynchronous programming, and tell me who
+> asked them and what their reputation is.
 
-The agent uses **`ProductCategories`** (and maybe `Products`) and summarizes.
-
-> A customer wants a gift under $50 for someone who likes cycling. Suggest a few
-> options and explain each.
-
-Watch it combine **`FindSimilarProducts`** (semantic) with a price constraint and
-synthesize a recommendation — the kind of thing that normally takes an
-embedding pipeline, a vector store, and an API. Here it's one MCP server.
+Watch the agent combine **`find_similar_questions`** (semantic) → take the
+`OwnerUserId` → look the author up via **`Users`**, then synthesize. That's the
+kind of thing that normally takes an embedding pipeline, a vector store, and an
+API. Here it's one MCP server over one database.
 
 ---
 
-### 4. Order data (shows it's a whole database, not just a search box)
+### 4. The bonus act — agents doing DBA work (`sql-dba` server)
 
-> Show me the most recent sales orders and their totals.
+Switch servers. Everything above was the *application* talking to its data; now
+the agent is a junior DBA looking after the server itself — still no SQL written
+by hand, still boxed into read-only.
 
-Uses **`SalesOrders`**.
+> This SQL Server feels sluggish. What is it spending its time waiting on?
 
-> For the largest of those orders, what was actually in it?
+Calls **`get_wait_stats`** on the `sql1` instance and explains the top waits in
+plain language.
 
-Uses **`SalesOrderDetails`** joined to **`Products`** — the agent chains tool
-calls to answer a question that spans tables.
+> What are the most expensive queries running on it right now?
+
+**`get_top_queries`**. Follow with:
+
+> Is anything blocking anything else? And what sessions are currently active?
+
+**`get_blocking_chains`** + **`get_active_sessions`**.
+
+> Which databases live on this instance, how big are they, and are there any
+> missing indexes worth looking at?
+
+**`get_database_info`** / **`get_database_files`** / **`get_missing_indexes`** —
+the agent chains several monitoring tools and writes you a short health summary.
+(The server exposes ~30 read-only tools — wait stats, blocking, top queries,
+file IO, memory, tempdb, deadlocks, backup/AG health, and more.)
 
 ---
 
 ### 5. The governance point (great closer)
 
-> Delete all discontinued products.
+> Drop the Posts table. Then delete the user with the highest reputation.
 
-The agent will report it **can't** — the entities are read-only in
-`dab-config.json` and `dab_app` has no such rights anyway. This is the line to
-land on: *the guardrails live in Data API builder and a least-privilege SQL
-login, not in hoping the model behaves.* Open `dab-config.json` and show the
-`permissions` blocks; the agent's reach is exactly what's listed there and
-nothing more.
+The agent will report it **can't** — the `stackoverflow` entities are read-only
+in `dab-config.json`, the `sql-dba` server's tools are all read-only, and neither
+login can write anything: `dab_app` has `SELECT`/`EXECUTE` only, and `dba_monitor`
+has just `VIEW SERVER STATE`. This is the line to land on: *the guardrails live in
+the MCP config and least-privilege SQL logins, not in hoping the model behaves.*
+Open `dab-config.json` and show the `permissions` blocks; the agent's reach is
+exactly what's listed there and nothing more.
 
 ---
 
@@ -85,5 +109,6 @@ nothing more.
 
 > "I didn't build a vector database. I didn't build an embedding service. I
 > didn't build an API. SQL Server 2025 generated the embeddings and did the
-> vector search, and Data API builder turned the database into MCP tools from one
-> config file — with the agent boxed into exactly what I chose to expose."
+> vector search; Data API builder turned the database into MCP tools from one
+> config file; and a tiny MCP server gave my agent read-only DBA superpowers —
+> with both agents boxed into exactly what I chose to expose."
