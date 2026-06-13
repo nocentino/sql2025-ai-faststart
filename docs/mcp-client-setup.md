@@ -6,10 +6,40 @@ Once the stack is up, Data API builder serves an MCP endpoint at:
 http://localhost:5001/mcp
 ```
 
-Point any MCP-capable agent at it. Below are the two most common clients. After
-configuring, run the prompts in [../demos/agent-demo.md](../demos/agent-demo.md).
+Point any MCP-capable agent at it. After configuring, run the prompts in
+[../demos/agent-demo.md](../demos/agent-demo.md).
 
 > First verify DAB is healthy: `curl http://localhost:5001/health`
+
+---
+
+## Claude in VS Code (Claude Code) — already wired up
+
+**Nothing to configure.** This repo ships a project-scoped
+[`.mcp.json`](../.mcp.json) at its root:
+
+```json
+{
+  "mcpServers": {
+    "adventureworks": {
+      "type": "http",
+      "url": "http://localhost:5001/mcp"
+    }
+  }
+}
+```
+
+When you open this folder in VS Code, Claude discovers that server
+automatically. The first time, Claude asks you to **approve** the project MCP
+server (project-scoped servers are trust-gated) — approve it, or run
+`/mcp` in Claude to check status and approve. Then ask:
+
+```
+Use the adventureworks tools to find me a comfortable bike for long rides under $1000.
+```
+
+Run `/mcp` any time to see the connection and the tools Claude can see. The same
+`.mcp.json` works for the Claude Code CLI in this directory — no extra setup.
 
 ---
 

@@ -142,8 +142,11 @@ This is the part the AI audience cares about. Data API builder reads
   executes the proc; SQL Server embeds the query with Ollama and runs vector
   search. The agent gets ranked results and never sees a line of SQL.
 
-Wire up your client with [docs/mcp-client-setup.md](docs/mcp-client-setup.md),
-then run the scripted prompts in [demos/agent-demo.md](demos/agent-demo.md).
+If you use **Claude in VS Code**, it's already wired up — this repo ships a
+project-scoped [`.mcp.json`](.mcp.json), so opening the folder is enough (approve
+the server when Claude prompts, or run `/mcp`). For GitHub Copilot or Claude
+Desktop, see [docs/mcp-client-setup.md](docs/mcp-client-setup.md). Then run the
+scripted prompts in [demos/agent-demo.md](demos/agent-demo.md).
 
 ### What this looks like in practice
 
@@ -207,6 +210,7 @@ The whole point of the DAB layer is **controlled** agentic access:
 ├── docker-compose.yml          # the whole stack, in dependency order
 ├── dockerfile.ssl              # tiny image that generates the NGINX cert
 ├── dab-config.json             # Data API builder entities + MCP config  ← the new part
+├── .mcp.json                   # pre-wires Claude in VS Code to the DAB MCP endpoint
 ├── backups/
 │   └── AdventureWorks2025_FULL.bak
 ├── certs/                      # openssl config + generate script (certs are git-ignored)

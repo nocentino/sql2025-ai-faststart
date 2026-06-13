@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "adventureworks": {
+      "type": "http",
+      "url": "http://localhost:5001/mcp"
+    }
+  }
+}
