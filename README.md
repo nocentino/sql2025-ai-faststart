@@ -258,7 +258,8 @@ The whole point of the MCP layer is **controlled** agentic access:
 │   ├── vector-demos.sql        # the canonical, idempotent walkthrough (Steps 0–7)
 │   └── agent-demo.md           # natural-language prompts to run against the agents
 ├── docs/
-│   └── mcp-client-setup.md     # wire VS Code / Claude Desktop to the MCP endpoints
+│   ├── mcp-client-setup.md     # wire VS Code / Claude Desktop to the MCP endpoints
+│   └── embedding-models.md     # benchmark: why nomic-embed-text, and how to switch
 ├── sql-dba-mcp/                # the bonus read-only DBA monitoring MCP server (TypeScript)
 ├── start.sh / stop.sh
 └── README.md
@@ -283,6 +284,7 @@ the DMVs into governed monitoring tools. Put them together and an AI agent can d
 semantic search over your data *and* triage the server's health — without you
 building a vector store, an embedding pipeline, or an API tier.
 
-Clone it, run it, and start poking. Swap `nomic-embed-text` for another model,
-point the EXTERNAL MODEL at Azure OpenAI, expose your own tables in
+Clone it, run it, and start poking. Swap `nomic-embed-text` for another model
+([docs/embedding-models.md](docs/embedding-models.md) benchmarks the options on
+this data), point the EXTERNAL MODEL at Azure OpenAI, expose your own tables in
 `dab-config.json`. It's a sandbox — break it and `./stop.sh --wipe` puts it back.

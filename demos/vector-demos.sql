@@ -231,7 +231,7 @@ GO
 DECLARE @search_text   NVARCHAR(MAX) = N'my git history is a mess, how do I clean it up?';
 DECLARE @search_vector VECTOR(768)   = AI_GENERATE_EMBEDDINGS(@search_text USE MODEL ollama);
 
-SELECT TOP (5)
+SELECT TOP (10)
     p.Id,
     p.Title,
     p.Score,
@@ -320,7 +320,8 @@ SELECT
     p.Score,
     p.ViewCount,
     p.AnswerCount,
-    p.CreationDate
+    p.CreationDate,
+    p.OwnerUserId          -- asker; the Questions->Users relationship joins on this
 FROM dbo.Posts p
 WHERE p.PostTypeId = 1;
 GO
@@ -341,11 +342,12 @@ BEGIN
     SELECT TOP (@top)
         p.Id,
         p.Title,
+        VECTOR_DISTANCE('cosine', @qv, qe.embeddings) AS distance,
         REPLACE(REPLACE(REPLACE(ISNULL(p.Tags, N''), '><', ', '), '<', ''), '>', '') AS Tags,
         p.Score,
         p.ViewCount,
         p.AnswerCount,
-        VECTOR_DISTANCE('cosine', @qv, qe.embeddings) AS distance
+        p.OwnerUserId       -- lets the agent chain to the Users entity (DisplayName, Reputation)
     FROM dbo.QuestionEmbeddings qe
     JOIN dbo.Posts p ON qe.PostId = p.Id
     ORDER BY distance;
@@ -353,7 +355,7 @@ END
 GO
 
 -- Try the proc directly, the same way Data API builder will call it for the agent:
-EXEC dbo.find_similar_questions @prompt = N'how do I center a div in css', @top = 5;
+EXEC dbo.find_similar_questions @prompt = N'how do i troubleshoot cpu on linux', @top = 5;
 GO
 
 -- (b) Least-privilege login for Data API builder.

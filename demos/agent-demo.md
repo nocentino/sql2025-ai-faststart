@@ -52,8 +52,7 @@ Back to **`find_similar_questions`** — "similar in spirit" is a meaning questi
 
 ### 3. Multi-step reasoning across tools
 
-> Find a few popular questions about asynchronous programming, and tell me who
-> asked them and what their reputation is.
+> Find a few popular questions about asynchronous programming, and tell me who asked them and what their reputation is.
 
 Watch the agent combine **`find_similar_questions`** (semantic) → take the
 `OwnerUserId` → look the author up via **`Users`**, then synthesize. That's the
