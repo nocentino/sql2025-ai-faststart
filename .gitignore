@@ -1,0 +1,6 @@
+# Generated at startup by the `config` service — never commit private keys
+certs/*.crt
+certs/*.key
+
+# macOS
+.DS_Store

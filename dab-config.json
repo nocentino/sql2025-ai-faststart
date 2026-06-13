@@ -1,0 +1,200 @@
+{
+  "$schema": "https://github.com/Azure/data-api-builder/releases/latest/download/dab.draft.schema.json",
+  "data-source": {
+    "database-type": "mssql",
+    "connection-string": "@env('MSSQL_CONNECTION_STRING')",
+    "options": {
+      "set-session-context": false
+    }
+  },
+  "runtime": {
+    "rest": {
+      "enabled": true,
+      "path": "/api",
+      "request-body-strict": true
+    },
+    "graphql": {
+      "enabled": true,
+      "path": "/graphql",
+      "allow-introspection": true
+    },
+    "mcp": {
+      "enabled": true,
+      "path": "/mcp",
+      "dml-tools": {
+        "describe-entities": true,
+        "read-records": true,
+        "create-record": false,
+        "update-record": false,
+        "delete-record": false,
+        "execute-entity": true,
+        "aggregate-records": true
+      }
+    },
+    "host": {
+      "cors": {
+        "origins": [],
+        "allow-credentials": false
+      },
+      "authentication": {
+        "provider": "StaticWebApps"
+      },
+      "mode": "development"
+    }
+  },
+  "entities": {
+    "FindSimilarProducts": {
+      "source": {
+        "object": "SalesLT.find_similar_products",
+        "type": "stored-procedure",
+        "parameters": [
+          {
+            "name": "prompt",
+            "required": true,
+            "description": "A natural-language description of what the user is looking for, e.g. 'an affordable red road bike' or 'something comfortable for a long ride'. This text is embedded and compared against every product."
+          },
+          {
+            "name": "top",
+            "required": false,
+            "default": 5,
+            "description": "How many of the closest-matching products to return. Defaults to 5."
+          }
+        ]
+      },
+      "rest": {
+        "enabled": true,
+        "methods": ["GET", "POST"]
+      },
+      "graphql": {
+        "enabled": true,
+        "operation": "query"
+      },
+      "mcp": {
+        "custom-tool": true
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["execute"]
+        }
+      ],
+      "description": "Semantic product search over the AdventureWorks catalog, powered by SQL Server 2025 native vector search and local Ollama embeddings. Call this whenever a user describes what they want in their own words instead of giving an exact product name, number, or filter (e.g. 'a lightweight bike for hills', 'a gift under $50'). Returns the closest-matching products ranked by cosine distance (smaller distance = better match), with name, list price, and the descriptive text that was matched."
+    },
+    "Products": {
+      "source": {
+        "object": "SalesLT.vProductCatalog",
+        "type": "view",
+        "key-fields": ["ProductID"]
+      },
+      "rest": {
+        "enabled": true
+      },
+      "graphql": {
+        "enabled": true,
+        "type": {
+          "singular": "Product",
+          "plural": "Products"
+        }
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ],
+      "description": "The product catalog: name, product number, color, size, weight, standard cost, list price, category, and model. Use this for exact lookups and structured filters (by name, category, color, or price range). For fuzzy 'find me something like…' requests, use FindSimilarProducts instead."
+    },
+    "ProductCategories": {
+      "source": {
+        "object": "SalesLT.ProductCategory",
+        "type": "table"
+      },
+      "rest": {
+        "enabled": true
+      },
+      "graphql": {
+        "enabled": true,
+        "type": {
+          "singular": "ProductCategory",
+          "plural": "ProductCategories"
+        }
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ],
+      "description": "Product category hierarchy (e.g. Bikes, Components, Clothing, Accessories, and their subcategories). Use this to understand how products are organized."
+    },
+    "Customers": {
+      "source": {
+        "object": "SalesLT.Customer",
+        "type": "table"
+      },
+      "rest": {
+        "enabled": true
+      },
+      "graphql": {
+        "enabled": true,
+        "type": {
+          "singular": "Customer",
+          "plural": "Customers"
+        }
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ],
+      "description": "Customers, including company name, contact name, and sales person. Join to SalesOrders via CustomerID."
+    },
+    "SalesOrders": {
+      "source": {
+        "object": "SalesLT.SalesOrderHeader",
+        "type": "table"
+      },
+      "rest": {
+        "enabled": true
+      },
+      "graphql": {
+        "enabled": true,
+        "type": {
+          "singular": "SalesOrder",
+          "plural": "SalesOrders"
+        }
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ],
+      "description": "Sales order headers: order date, due date, ship date, status, customer, and totals. Each order has one or more line items in SalesOrderDetails. Join via SalesOrderID."
+    },
+    "SalesOrderDetails": {
+      "source": {
+        "object": "SalesLT.SalesOrderDetail",
+        "type": "table"
+      },
+      "rest": {
+        "enabled": true
+      },
+      "graphql": {
+        "enabled": true,
+        "type": {
+          "singular": "SalesOrderDetail",
+          "plural": "SalesOrderDetails"
+        }
+      },
+      "permissions": [
+        {
+          "role": "anonymous",
+          "actions": ["read"]
+        }
+      ],
+      "description": "Individual line items for each sales order: product, quantity, unit price, and discount. Join to SalesOrders via SalesOrderID and to Products via ProductID."
+    }
+  }
+}
