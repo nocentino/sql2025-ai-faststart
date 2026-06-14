@@ -91,7 +91,7 @@ plain language.
 
 **`get_blocking_chains`** + **`get_active_sessions`**.
 
-> What databases are squattin' on this box, how chonky they gettin', and any glaringly missing indexes worth a look?
+> What databases are squattin' on this box, how heavy they weighin' in, and any missing indexes stickin' out worth a look? 🐝
 
 **`get_database_info`** / **`get_database_files`** / **`get_missing_indexes`** —
 the agent chains several monitoring tools and writes you a short health summary.
