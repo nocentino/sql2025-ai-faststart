@@ -185,7 +185,7 @@ GO
    writable, so none of this is needed there.)
 ----------------------------------------------------------------------------- */
 ;WITH top_questions AS (
-    SELECT TOP (10000)
+    SELECT TOP (1000)
         p.Id,
         -- Title + cleaned tags, e.g. "How do JavaScript closures work? javascript function scope"
         p.Title + N' ' +
@@ -242,21 +242,9 @@ WHERE p.PostTypeId = 1
 ORDER BY p.Score DESC;
 GO
 
--- (2) Loosen to just LIKE '%git%'. Now there are plenty of hits, but they're
---     ranked by Score, not relevance - "git pull vs git fetch" (nothing to do
---     with cleanup) sits near the top. BRITTLE #2: keyword search knows a word is
---     PRESENT, not whether the row ANSWERS the question, so you fall back to
---     popularity and hope.
-SELECT TOP (10) p.Id, p.Title, p.Score
-FROM dbo.Posts p
-WHERE p.PostTypeId = 1
-  AND p.Title LIKE N'%git%'
-ORDER BY p.Score DESC;
-GO
-
--- (3) Try harder: hand-enumerate every synonym you can think of. This finally
+-- (2) Try harder: hand-enumerate every synonym you can think of. This finally
 --     surfaces good hits (undo / reset / rewrite / history) - but ONLY the ones
---     you remembered. BRITTLE #3: YOU must supply every phrasing. Miss a synonym
+--     you remembered. BRITTLE #2: YOU must supply every phrasing. Miss a synonym
 --     ("squash", "amend", "filter-branch", "scrub"), reword it, add a typo, or
 --     ask in another language and the row silently disappears. This keyword soup
 --     is never complete and does not scale.
@@ -287,7 +275,7 @@ GO
    come back even when they share NO keywords with the query.
 
    Turn on statistics so you can SEE this is a full scan of the table - fine for
-   2,000 rows, but it would not scale to millions. That sets up Step 6.
+   a small number of rows, but it would not scale to millions. That sets up Step 6.
 ----------------------------------------------------------------------------- */
 SET STATISTICS TIME ON;
 SET STATISTICS IO ON;
@@ -419,7 +407,7 @@ END
 GO
 
 -- Try the proc directly, the same way Data API builder will call it for the agent:
-EXEC dbo.find_similar_questions @prompt = N'how do i troubleshoot cpu on linux', @top = 5;
+EXEC dbo.find_similar_questions @prompt = N'my code runs like its on a potato — how do I make it faster?', @top = 5;
 GO
 
 -- (b) Least-privilege login for Data API builder.
