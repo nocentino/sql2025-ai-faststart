@@ -1,5 +1,10 @@
 # SQL Server 2025 AI FastStart
 
+> **AI _inside_ the database, and AI agents _onto_ it — safely.** SQL Server 2025
+> native vector search and `AI_GENERATE_EMBEDDINGS` over the StackOverflow dataset,
+> exposed to AI agents through Data API builder's built-in MCP server. No separate
+> vector database, no embedding service, no API tier.
+
 This is a container-based playground that tells one story end to end: **your
 relational database can do AI itself, and your AI agents can talk to it safely.**
 
@@ -289,3 +294,18 @@ Clone it, run it, and start poking. Swap `nomic-embed-text` for another model
 ([docs/embedding-models.md](docs/embedding-models.md) benchmarks the options on
 this data), point the EXTERNAL MODEL at Azure OpenAI, expose your own tables in
 `dab-config.json`. It's a sandbox — break it and `./stop.sh --wipe` puts it back.
+
+---
+
+## Credits & acknowledgments
+
+- **Data** — the [Stack Exchange / StackOverflow public data dump](https://archive.org/details/stackexchange),
+  with content licensed **CC BY-SA**. This repo restores a trimmed *StackOverflowMini* sample for a fast startup.
+- **Embeddings** — [Ollama](https://ollama.com) serving [`nomic-embed-text`](https://ollama.com/library/nomic-embed-text)
+  (the default), with [`mxbai-embed-large`](https://ollama.com/library/mxbai-embed-large) as the higher-accuracy option.
+- **In the database** — SQL Server 2025's native `VECTOR` type, `AI_GENERATE_EMBEDDINGS`, and the DiskANN `VECTOR_SEARCH` index.
+- **The agent layer** — [Data API builder](https://learn.microsoft.com/azure/data-api-builder/) and its built-in MCP server.
+- Grown from two earlier demos: [ollama-sql-faststart](https://github.com/nocentino/ollama-sql-faststart) and the SQL DBA MCP server.
+- Built and maintained by [Anthony E. Nocentino](https://www.nocentino.com) ([@nocentino](https://github.com/nocentino)).
+
+**Topics:** `sql-server` · `sql-server-2025` · `vector-search` · `embeddings` · `diskann` · `semantic-search` · `mcp` · `model-context-protocol` · `data-api-builder` · `ollama` · `rag` · `ai-agents` · `t-sql` · `docker`
