@@ -15,7 +15,8 @@
        Step 0-1  Get a normal relational database (StackOverflow) online.
        Step 2    Point SQL Server at a local embedding model (host Ollama).
        Step 3-4  Turn question text into vectors and store them IN the database.
-       Step 5    Semantic search with a SQL function (exact / kNN).
+       Step 5    First the OLD way (keyword / LIKE search) and why it's brittle,
+                 then semantic search by MEANING with a SQL function (exact / kNN).
        Step 6    Make it fast at scale with a DiskANN vector index (ANN).
        Step 7    Hand the database to AI agents over MCP (Data API builder + the
                  SQL DBA MCP server).
@@ -184,7 +185,7 @@ GO
    writable, so none of this is needed there.)
 ----------------------------------------------------------------------------- */
 ;WITH top_questions AS (
-    SELECT TOP (2000)
+    SELECT TOP (10000)
         p.Id,
         -- Title + cleaned tags, e.g. "How do JavaScript closures work? javascript function scope"
         p.Title + N' ' +
@@ -212,6 +213,69 @@ SELECT TOP (5) qe.PostId, p.Title, qe.chunk, qe.embeddings
 FROM dbo.QuestionEmbeddings qe
 JOIN dbo.Posts p ON qe.PostId = p.Id;
 GO
+
+
+/* -----------------------------------------------------------------------------
+   THE OLD WAY -  keyword / string matching, and why it breaks
+   -----------------------------------------------------------------------------
+   Before vectors, "search" meant LIKE '%keyword%' against the text. It has its
+   place, but for a NATURAL-LANGUAGE question it is brittle. The user's question
+   is the very one Step 5 will answer by meaning:
+
+       "my git history is a mess, how do I clean it up?"
+
+   To use LIKE you must first throw the sentence away and GUESS the keywords -
+   and that is where it falls apart. Run these, then compare to Step 5.
+----------------------------------------------------------------------------- */
+
+-- (1) Search the user's OWN words. Almost everything that comes back is noise:
+--     LIKE '%mess%' matches the substring inside "commit MESSage", so you get
+--     "edit an incorrect commit message", "Tag messages on github", ... while
+--     the real answers (undo commits, rewrite history, reset) never appear -
+--     their titles don't contain "mess" or "clean". BRITTLE #1: string matching
+--     has no idea what words MEAN, and happily matches substrings you never meant.
+SELECT TOP (10) p.Id, p.Title, p.Score
+FROM dbo.Posts p
+WHERE p.PostTypeId = 1
+  AND p.Title LIKE N'%git%'
+  AND (p.Title LIKE N'%mess%' OR p.Title LIKE N'%clean%')
+ORDER BY p.Score DESC;
+GO
+
+-- (2) Loosen to just LIKE '%git%'. Now there are plenty of hits, but they're
+--     ranked by Score, not relevance - "git pull vs git fetch" (nothing to do
+--     with cleanup) sits near the top. BRITTLE #2: keyword search knows a word is
+--     PRESENT, not whether the row ANSWERS the question, so you fall back to
+--     popularity and hope.
+SELECT TOP (10) p.Id, p.Title, p.Score
+FROM dbo.Posts p
+WHERE p.PostTypeId = 1
+  AND p.Title LIKE N'%git%'
+ORDER BY p.Score DESC;
+GO
+
+-- (3) Try harder: hand-enumerate every synonym you can think of. This finally
+--     surfaces good hits (undo / reset / rewrite / history) - but ONLY the ones
+--     you remembered. BRITTLE #3: YOU must supply every phrasing. Miss a synonym
+--     ("squash", "amend", "filter-branch", "scrub"), reword it, add a typo, or
+--     ask in another language and the row silently disappears. This keyword soup
+--     is never complete and does not scale.
+SELECT TOP (10) p.Id, p.Title, p.Score
+FROM dbo.Posts p
+WHERE p.PostTypeId = 1
+  AND p.Title LIKE N'%git%'
+  AND ( p.Title LIKE N'%clean%' OR p.Title LIKE N'%mess%'
+     OR p.Title LIKE N'%undo%'  OR p.Title LIKE N'%rewrite%'
+     OR p.Title LIKE N'%reset%' OR p.Title LIKE N'%history%' )
+ORDER BY p.Score DESC;
+GO
+
+-- TAKEAWAY: keyword search makes YOU predict the exact words in the answer.
+-- Step 5 flips it - hand it the sentence as-is and it ranks by MEANING, so
+-- "messy / clean up" finds "rewrite history / undo commits / remove file from
+-- history" with zero shared words. (Bonus brittleness: LIKE '%x%' leads with a
+-- wildcard, so it can't seek an index - it scans every row, which also won't
+-- scale to millions.)
 
 
 /* -----------------------------------------------------------------------------

@@ -42,7 +42,7 @@ Server. Everything is pre-built at startup, so nothing makes you wait live.
 |---|---|---|
 | 0–3 min | Architecture slide + `docker compose ps` | One database does it all — no separate vector DB, no app tier to glue it together. |
 | 3–8 min | **Step 2** in `demos/vector-demos.sql`: create the EXTERNAL MODEL, run the single-embedding `SELECT` | "An embedding is a SQL function call. The model is just a named pointer — Ollama today, Azure OpenAI tomorrow, same query." |
-| 8–14 min | **Steps 3–5**: show the `VECTOR(768)` column + the kNN search with `VECTOR_DISTANCE` | Semantic search over real questions, in T-SQL. Note it never matches the literal words. |
+| 8–14 min | **Steps 3–5**: the `VECTOR(768)` column, then the OLD keyword/`LIKE` search (watch it whiff on the user's own words), then the kNN search with `VECTOR_DISTANCE` | Show *why* string matching is brittle first, then the same question answered by *meaning* — semantic search over real questions, in T-SQL, matching with zero shared keywords. |
 | 14–19 min | **Step 6**: the DiskANN `CREATE VECTOR INDEX` + `VECTOR_SEARCH`, compare the IO stats | This is how it scales — the same DiskANN tech Microsoft runs at billions of vectors. |
 | 19–22 min | **Step 7**: the `find_similar_questions` proc + the least-privilege `dab_app` login | "Now I'll hand this to an agent — but only what I choose, and only what this login can touch." |
 | 22–29 min | Switch to your AI client. Run the prompts in `demos/agent-demo.md` — semantic search via **DAB MCP**, then the **SQL DBA MCP** bonus act | The payoff: the agent does semantic search *and* DBA triage with **zero SQL**, governed by config + least-privilege logins. |
@@ -139,9 +139,9 @@ re-run the interesting parts live:
 |---|---|
 | 0–1 | Enable outbound HTTPS; restore StackOverflow *(setup only — skip live)* |
 | 2 | `CREATE EXTERNAL MODEL` pointing at host Ollama; generate one embedding to see what it is |
-| 3 | The native `VECTOR(768)` column |
-| 4 | `AI_GENERATE_EMBEDDINGS` over the top 2,000 questions in a single `INSERT…SELECT` |
-| 5 | Exact semantic search (kNN) with `VECTOR_DISTANCE` — watch the table scan |
+| 3 | The native `VECTOR(768)` column, on its own dedicated `EMBEDDINGS` filegroup + data file |
+| 4 | `AI_GENERATE_EMBEDDINGS` over the top-scored questions in a single `INSERT…SELECT` |
+| 5 | First the **old way** — keyword/`LIKE` search and why it's brittle — then exact semantic search (kNN) with `VECTOR_DISTANCE`; watch the table scan |
 | 6 | DiskANN `CREATE VECTOR INDEX` + `VECTOR_SEARCH` (ANN) — watch it get cheap |
 | 7 | Wrap the search in a stored proc + create the `dab_app` and `dba_monitor` least-privilege logins |
 
@@ -154,7 +154,8 @@ repo's project-scoped [`.mcp.json`](.mcp.json) pre-wires both for Claude in VS C
 and stands up an MCP server at `http://localhost:5001/mcp`:
 
 - **Data tools** over `Questions` (the catalog view) and `Users` (read-only) — the
-  agent can filter questions by tag/score/date and look up who asked them.
+  agent can filter questions by tag/score/date, then chain from a question's
+  `OwnerUserId` to look up who asked it and what their reputation is.
 - **`find_similar_questions`** — our semantic-search proc, registered as a *named*
   MCP custom tool (`mcp.custom-tool: true`, new in DAB 2.0). When the user describes
   a problem in plain language, the agent calls this tool; DAB executes the proc;
@@ -173,19 +174,19 @@ Then run the scripted prompts in [demos/agent-demo.md](demos/agent-demo.md).
 
 ### What this looks like in practice
 
-> **You:** "I need to get a box to sit in the middle of the page, both
-> horizontally and vertically. Any relevant questions?"
+> **You:** "I need to get a box dead-center on the page, both horizontally and
+> vertically. Any relevant questions?"
 
 ```
-Agent → find_similar_questions(prompt: "center a box in the middle of the page", top: 5)
-      ← [ { Title: "How to vertically center a div for all browsers?",  Score: 1530, distance: 0.12 },
-          { Title: "How do I vertically center text with CSS?",         Score:  980, distance: 0.18 },
+Agent → find_similar_questions(prompt: "center a box in the middle of the page, both directions", top: 5)
+      ← [ { Title: "Best way to center a <div> on a page vertically and horizontally?", Score:  428, distance: 0.34 },
+          { Title: "How to horizontally center a <div> in another <div>?",             Score: 3549, distance: 0.34 },
+          { Title: "How to align a <div> to the middle of the page",                   Score:  680, distance: 0.35 },
           ... ]
 
-Agent: "The canonical answer is 'How to vertically center a div for all browsers?'
-        (1,530 votes). For modern browsers the flexbox approach is simplest —
-        set the parent to display:flex with justify-content and align-items both
-        centered..."
+Agent: "The closest match is 'Best way to center a <div> vertically and horizontally?'
+        For modern browsers the flexbox approach is simplest — set the parent to
+        display:flex with justify-content and align-items both centered..."
 ```
 
 Notice the user never said "div" or "center," and the agent never wrote SQL. The
