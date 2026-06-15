@@ -280,6 +280,26 @@ The whole point of the MCP layer is **controlled** agentic access:
 
 Host Ollama and the downloaded `.bak` are left alone, so a reset is quick.
 
+## Resources & next steps
+
+**SQL Server 2025 — vectors & AI (official docs)**
+
+- [Vectors in the SQL Database Engine](https://learn.microsoft.com/en-us/sql/sql-server/ai/vectors?view=sql-server-ver17) — the concepts: the `VECTOR` type, exact (kNN) vs approximate (ANN) search, and how vector indexing works.
+- [`CREATE VECTOR INDEX` (Transact-SQL)](https://learn.microsoft.com/en-us/sql/t-sql/statements/create-vector-index-transact-sql?view=sql-server-ver17) — DiskANN index syntax, limitations, DML support, and the earlier-vs-latest version notes.
+- [`VECTOR_SEARCH` (Transact-SQL)](https://learn.microsoft.com/en-us/sql/t-sql/functions/vector-search-transact-sql?view=sql-server-ver17) — the approximate nearest-neighbor search function used in Step 6.
+
+**Embeddings & external models (Azure SQL devblog)**
+
+- [Generate Embeddings function and External Model object support are now GA in Azure SQL](https://devblogs.microsoft.com/azure-sql/generate-embeddings-function-and-external-model-object-support-are-now-generally-available-in-azure-sql/) — the GA announcement for `AI_GENERATE_EMBEDDINGS` + `CREATE EXTERNAL MODEL`.
+- [Azure SQL devblog](https://devblogs.microsoft.com/azure-sql/) — ongoing posts on vectors, DiskANN improvements, and AI features.
+
+**Next steps in this repo**
+
+- Swap the embedding model — [docs/embedding-models.md](docs/embedding-models.md) benchmarks `nomic-embed-text` vs `mxbai-embed-large` vs `embeddinggemma` on this data.
+- Point `CREATE EXTERNAL MODEL` at Azure OpenAI / OpenAI instead of Ollama — every query in the walkthrough stays identical.
+- Expose your own tables and procs as MCP tools by editing [dab-config.json](dab-config.json).
+- Wire a different MCP client (GitHub Copilot, Claude Desktop) — [docs/mcp-client-setup.md](docs/mcp-client-setup.md).
+
 ## Wrapping up
 
 Two ideas, one stack. SQL Server 2025 pulls AI *into* the database: embeddings

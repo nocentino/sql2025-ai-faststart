@@ -280,7 +280,10 @@ GO
 SET STATISTICS TIME ON;
 SET STATISTICS IO ON;
 GO
-DECLARE @search_text   NVARCHAR(MAX) = N'my git history is a mess, how do I clean it up?';
+DECLARE @search_text   NVARCHAR(MAX) = N'
+Yo, my git history is straight bringin'' da ruckus — drive-by commits, three "fix typo" joints back to back. 
+How do I clean up this mess before the code review, son?';
+
 DECLARE @search_vector VECTOR(768)   = AI_GENERATE_EMBEDDINGS(@search_text USE MODEL ollama);
 
 SELECT TOP (10)
@@ -328,7 +331,9 @@ GO
 SET STATISTICS TIME ON;
 SET STATISTICS IO ON;
 GO
-DECLARE @search_text   NVARCHAR(MAX) = N'my git history is a mess, how do I clean it up?';
+DECLARE @search_text   NVARCHAR(MAX) = N'
+Yo, my git history is straight bringin'' da ruckus — drive-by commits, three "fix typo" joints back to back. 
+How do I clean up this mess before the code review, son?';
 DECLARE @search_vector VECTOR(768)   = AI_GENERATE_EMBEDDINGS(@search_text USE MODEL ollama);
 
 SELECT t.PostId, p.Title, s.distance, p.Score
